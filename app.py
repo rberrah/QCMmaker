@@ -5,376 +5,297 @@ from datetime import datetime
 from transformers import pipeline
 import pandas as pd
 
-# Modules pour extraire du texte depuis différents formats
+# Modules d'extraction pour divers formats
 import PyPDF2
 import docx
 from pptx import Presentation
 
-# =============================================
-# Définition des fichiers de stockage persistants
+# === Définition des chemins pour la persistance ===
 COURSES_DB_FILE = "courses_db.json"
 EXAMS_DB_FILE = "exams_db.json"
 FEEDBACK_DB_FILE = "feedback_history.json"
 
-# =============================================
-# Fonctions de stockage pour les cours
-def load_courses_db():
-    if os.path.exists(COURSES_DB_FILE):
+# === Fonctions de persistance JSON ===
+def load_json(file_path):
+    if os.path.exists(file_path):
         try:
-            with open(COURSES_DB_FILE, "r") as f:
-                courses = json.load(f)
+            with open(file_path, "r") as f:
+                return json.load(f)
         except Exception as e:
-            st.error("Erreur lors du chargement de la base de cours.")
-            courses = []
+            st.error(f"Erreur lors du chargement de {file_path} : {e}")
+            return []
     else:
-        courses = []
-    return courses
+        return []
 
-def save_courses_db(courses):
-    with open(COURSES_DB_FILE, "w") as f:
-        json.dump(courses, f, ensure_ascii=False, indent=4)
+def save_json(file_path, data):
+    try:
+        with open(file_path, "w") as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        st.error(f"Erreur lors de la sauvegarde de {file_path} : {e}")
 
-# =============================================
-# Fonctions de stockage pour les annales
-def load_exams_db():
-    if os.path.exists(EXAMS_DB_FILE):
+def load_courses():
+    return load_json(COURSES_DB_FILE)
+
+def save_courses(courses):
+    save_json(COURSES_DB_FILE, courses)
+
+def load_exams():
+    return load_json(EXAMS_DB_FILE)
+
+def save_exams(exams):
+    save_json(EXAMS_DB_FILE, exams)
+
+def load_feedback():
+    return load_json(FEEDBACK_DB_FILE)
+
+def save_feedback(feedback):
+    save_json(FEEDBACK_DB_FILE, feedback)
+
+# === Fonction d'extraction de texte depuis un fichier ===
+def extract_text(uploaded_file):
+    ext = os.path.splitext(uploaded_file.name)[1].lower()
+    if ext == ".txt":
         try:
-            with open(EXAMS_DB_FILE, "r") as f:
-                exams = json.load(f)
+            return uploaded_file.getvalue().decode("utf-8")
         except Exception as e:
-            st.error("Erreur lors du chargement de la base de sujets d'annales.")
-            exams = []
-    else:
-        exams = []
-    return exams
-
-def save_exams_db(exams):
-    with open(EXAMS_DB_FILE, "w") as f:
-        json.dump(exams, f, ensure_ascii=False, indent=4)
-
-# =============================================
-# Fonctions de stockage pour le feedback
-def load_feedback_history():
-    if os.path.exists(FEEDBACK_DB_FILE):
-        try:
-            with open(FEEDBACK_DB_FILE, "r") as f:
-                history = json.load(f)
-        except Exception as e:
-            st.error("Erreur lors du chargement de l'historique des feedbacks.")
-            history = []
-    else:
-        history = []
-    return history
-
-def save_feedback_entry(entry):
-    history = load_feedback_history()
-    history.append(entry)
-    with open(FEEDBACK_DB_FILE, "w") as f:
-        json.dump(history, f, ensure_ascii=False, indent=4)
-
-# =============================================
-# Fonction d'extraction de texte depuis différents formats
-def extract_text_from_file(uploaded_file):
-    """
-    Extrait le texte d'un fichier en fonction de son extension.
-    Formats supportés : .txt, .pdf, .docx, .pptx, .xls et .xlsx.
-    Pour les PDF, chaque page est précédée d'une annotation indiquant
-    le numéro de page et le nom du fichier.
-    """
-    file_extension = os.path.splitext(uploaded_file.name)[1].lower()
-    text = ""
-    if file_extension == ".txt":
-        try:
-            text = uploaded_file.getvalue().decode("utf-8")
-        except Exception as e:
-            text = "Erreur lors de la lecture du fichier texte."
-    elif file_extension == ".pdf":
+            return f"Erreur lecture TXT: {e}"
+    elif ext == ".pdf":
         try:
             reader = PyPDF2.PdfReader(uploaded_file)
+            text = ""
             for idx, page in enumerate(reader.pages):
                 page_text = page.extract_text()
                 if page_text:
-                    text += f"Page {idx+1} de '{uploaded_file.name}':\n" + page_text + "\n\n"
+                    text += f"Page {idx+1} de '{uploaded_file.name}':\n{page_text}\n\n"
+            return text
         except Exception as e:
-            text = "Erreur lors de l'extraction du PDF."
-    elif file_extension == ".docx":
+            return f"Erreur extraction PDF: {e}"
+    elif ext == ".docx":
         try:
             doc = docx.Document(uploaded_file)
-            text = "\n".join([para.text for para in doc.paragraphs])
+            return "\n".join(p.text for p in doc.paragraphs)
         except Exception as e:
-            text = "Erreur lors de l'extraction du document Word."
-    elif file_extension == ".pptx":
+            return f"Erreur extraction DOCX: {e}"
+    elif ext == ".pptx":
         try:
-            presentation = Presentation(uploaded_file)
-            for slide in presentation.slides:
+            prs = Presentation(uploaded_file)
+            text = ""
+            for slide in prs.slides:
                 for shape in slide.shapes:
                     if hasattr(shape, "text"):
                         text += shape.text + "\n"
+            return text
         except Exception as e:
-            text = "Erreur lors de l'extraction du PowerPoint."
-    elif file_extension in [".xls", ".xlsx"]:
+            return f"Erreur extraction PPTX: {e}"
+    elif ext in [".xls", ".xlsx"]:
         try:
             df = pd.read_excel(uploaded_file)
-            text = df.to_string(index=False)
+            return df.to_string(index=False)
         except Exception as e:
-            text = "Erreur lors de l'extraction du fichier Excel."
+            return f"Erreur extraction Excel: {e}"
     else:
-        text = "Format de fichier non supporté."
-    return text
+        return "Format non supporté."
 
-# =============================================
-# Initialisation du générateur de questions (ici modèle T5-base)
-generator = pipeline("text2text-generation", model="t5-base")
+# === Initialisation du générateur ===
+try:
+    generator = pipeline("text2text-generation", model="t5-base")
+except Exception as e:
+    st.error(f"Erreur lors du chargement du modèle de génération : {e}")
+    generator = None
 
-# =============================================
-# Interface Streamlit avec plusieurs onglets
+# === Interface principale ===
 st.title("Générateur de Questions Type Annales")
-tabs = st.tabs(["Cours", "Sujets d'annales", "Générer les questions", "Feedback", "Historique Feedback"])
 
-# ---------- Onglet 1 : Déposer un cours ----------
+# Utilisation d'onglets pour organiser l'application
+tabs = st.tabs(["Cours", "Sujets d'annales", "Générer", "Feedback", "Historique"])
+
+# --------- Onglet 1 : Déposer des Cours ---------
 with tabs[0]:
-    st.header("Déposer un cours")
-    mode_course = st.radio("Mode de dépôt :", ("Téléverser des fichiers", "Saisie manuelle"), key="mode_course")
+    st.header("Déposer des Cours")
+    deposit_mode = st.radio("Mode de dépôt", ["Téléverser", "Saisie manuelle"], key="course_mode")
     course_year = st.number_input("Année du cours", value=2025, step=1, key="course_year")
     
-    if mode_course == "Téléverser des fichiers":
-        common_title_course = st.text_input("Titre commun du cours (optionnel)", key="common_course_title")
-        uploaded_course_files = st.file_uploader("Téléversez un ou plusieurs fichiers de cours",
-                                                 type=["txt", "pdf", "docx", "pptx", "xls", "xlsx"],
-                                                 accept_multiple_files=True,
-                                                 key="uploaded_course_files")
-        if uploaded_course_files:
-            new_courses = []
-            if common_title_course:
-                combined_text = ""
-                for f in uploaded_course_files:
-                    text = extract_text_from_file(f)
-                    if text.startswith("Erreur") or text.startswith("Format"):
-                        st.error(f"{f.name} : {text}")
-                    else:
-                        combined_text += text + "\n"
-                if combined_text:
-                    new_courses.append({
-                        "title": common_title_course,
-                        "text": combined_text,
-                        "year": int(course_year)
-                    })
+    if deposit_mode == "Téléverser":
+        common_title = st.text_input("Titre commun (optionnel)", key="course_common_title")
+        files = st.file_uploader("Choisissez un ou plusieurs fichiers", type=["txt", "pdf", "docx", "pptx", "xls", "xlsx"], 
+                                 key="course_files", accept_multiple_files=True)
+        if st.button("Enregistrer les cours"):
+            if files:
+                new_courses = []
+                if common_title:
+                    combined = ""
+                    for f in files:
+                        txt = extract_text(f)
+                        combined += txt + "\n"
+                    new_courses.append({"title": common_title, "year": int(course_year), "text": combined})
+                else:
+                    for f in files:
+                        txt = extract_text(f)
+                        new_courses.append({"title": f.name, "year": int(course_year), "text": txt})
+                courses = load_courses()
+                courses.extend(new_courses)
+                save_courses(courses)
+                st.success(f"{len(new_courses)} cours enregistrés.")
             else:
-                for f in uploaded_course_files:
-                    text = extract_text_from_file(f)
-                    if text.startswith("Erreur") or text.startswith("Format"):
-                        st.error(f"{f.name} : {text}")
-                    else:
-                        new_courses.append({
-                            "title": f.name,
-                            "text": text,
-                            "year": int(course_year)
-                        })
-            if new_courses:
-                courses_db = load_courses_db()
-                courses_db.extend(new_courses)
-                save_courses_db(courses_db)
-                st.success(f"{len(new_courses)} cours enregistrés avec succès.")
+                st.warning("Aucun fichier sélectionné.")
     else:
-        manual_course_title = st.text_input("Titre du cours ou chapitre", key="manual_course_title")
-        manual_course_text = st.text_area("Collez ici le contenu du cours", height=300, key="manual_course_text")
-        if manual_course_text:
-            new_course = {
-                "title": manual_course_title if manual_course_title else "Cours manuel",
-                "text": manual_course_text,
-                "year": int(course_year)
-            }
-            courses_db = load_courses_db()
-            courses_db.append(new_course)
-            save_courses_db(courses_db)
-            st.success("Cours saisi manuellement enregistré.")
+        manual_title = st.text_input("Titre du cours", key="manual_course_title")
+        manual_text = st.text_area("Entrez le contenu du cours", key="manual_course_text")
+        if st.button("Enregistrer le cours"):
+            if manual_text:
+                new_course = {"title": manual_title if manual_title else "Cours manuel", "year": int(course_year), "text": manual_text}
+                courses = load_courses()
+                courses.append(new_course)
+                save_courses(courses)
+                st.success("Cours enregistré.")
+            else:
+                st.warning("Le contenu du cours est vide.")
 
-# ---------- Onglet 2 : Déposer un sujet d'annales ----------
+# --------- Onglet 2 : Déposer des Sujets d'annales ---------
 with tabs[1]:
-    st.header("Déposer un sujet d'annale")
-    mode_exam = st.radio("Mode de dépôt :", ("Téléverser des fichiers", "Saisie manuelle"), key="mode_exam")
-    exam_year = st.number_input("Année du sujet d'annale", value=2025, step=1, key="exam_year")
+    st.header("Déposer des Sujets d'annales")
+    deposit_mode = st.radio("Mode", ["Téléverser", "Saisie manuelle"], key="exam_mode")
+    exam_year = st.number_input("Année du sujet", value=2025, step=1, key="exam_year")
     
-    if mode_exam == "Téléverser des fichiers":
-        common_title_exam = st.text_input("Titre commun du sujet d'annale (optionnel)", key="common_exam_title")
-        uploaded_exam_files = st.file_uploader("Téléversez un ou plusieurs fichiers de sujets d'annales",
-                                               type=["txt", "pdf", "docx", "pptx", "xls", "xlsx"],
-                                               accept_multiple_files=True,
-                                               key="uploaded_exam_files")
-        if uploaded_exam_files:
-            new_exams = []
-            if common_title_exam:
-                combined_text = ""
-                for f in uploaded_exam_files:
-                    text = extract_text_from_file(f)
-                    if text.startswith("Erreur") or text.startswith("Format"):
-                        st.error(f"{f.name} : {text}")
-                    else:
-                        combined_text += text + "\n"
-                if combined_text:
-                    new_exams.append({
-                        "title": common_title_exam,
-                        "text": combined_text,
-                        "year": int(exam_year)
-                    })
+    if deposit_mode == "Téléverser":
+        common_title = st.text_input("Titre commun (optionnel)", key="exam_common_title")
+        files = st.file_uploader("Choisissez un ou plusieurs fichiers", type=["txt", "pdf", "docx", "pptx", "xls", "xlsx"], 
+                                 key="exam_files", accept_multiple_files=True)
+        if st.button("Enregistrer les sujets"):
+            if files:
+                new_exams = []
+                if common_title:
+                    combined = ""
+                    for f in files:
+                        txt = extract_text(f)
+                        combined += txt + "\n"
+                    new_exams.append({"title": common_title, "year": int(exam_year), "text": combined})
+                else:
+                    for f in files:
+                        txt = extract_text(f)
+                        new_exams.append({"title": f.name, "year": int(exam_year), "text": txt})
+                exams = load_exams()
+                exams.extend(new_exams)
+                save_exams(exams)
+                st.success(f"{len(new_exams)} sujets enregistrés.")
             else:
-                for f in uploaded_exam_files:
-                    text = extract_text_from_file(f)
-                    if text.startswith("Erreur") or text.startswith("Format"):
-                        st.error(f"{f.name} : {text}")
-                    else:
-                        new_exams.append({
-                            "title": f.name,
-                            "text": text,
-                            "year": int(exam_year)
-                        })
-            if new_exams:
-                exams_db = load_exams_db()
-                exams_db.extend(new_exams)
-                save_exams_db(exams_db)
-                st.success(f"{len(new_exams)} sujets d'annales enregistrés avec succès.")
+                st.warning("Aucun fichier sélectionné.")
     else:
-        manual_exam_title = st.text_input("Titre du sujet d'annale", key="manual_exam_title")
-        manual_exam_text = st.text_area("Collez ici le contenu du sujet d'annale", height=200, key="manual_exam_text")
-        if manual_exam_text:
-            new_exam = {
-                "title": manual_exam_title if manual_exam_title else "Sujet manuel",
-                "text": manual_exam_text,
-                "year": int(exam_year)
-            }
-            exams_db = load_exams_db()
-            exams_db.append(new_exam)
-            save_exams_db(exams_db)
-            st.success("Sujet d'annale saisi manuellement enregistré.")
+        manual_title = st.text_input("Titre du sujet", key="manual_exam_title")
+        manual_text = st.text_area("Entrez le contenu du sujet", key="manual_exam_text")
+        if st.button("Enregistrer le sujet"):
+            if manual_text:
+                new_exam = {"title": manual_title if manual_title else "Sujet manuel", "year": int(exam_year), "text": manual_text}
+                exams = load_exams()
+                exams.append(new_exam)
+                save_exams(exams)
+                st.success("Sujet enregistré.")
+            else:
+                st.warning("Le contenu du sujet est vide.")
 
-# ---------- Onglet 3 : Générer les questions ----------
+# --------- Onglet 3 : Générer des Questions ---------
 with tabs[2]:
-    st.header("Générer les questions")
+    st.header("Générer des Questions")
+    st.subheader("Filtrer par Année")
+    start_year = st.number_input("Année de début", value=2000, step=1, key="gen_start_year")
+    end_year = st.number_input("Année de fin", value=2025, step=1, key="gen_end_year")
     
-    st.subheader("Filtrer par année")
-    start_year = st.number_input("Année de début", value=2000, step=1, key="start_year")
-    end_year = st.number_input("Année de fin", value=2025, step=1, key="end_year")
+    # Filtrer les cours et sujets enregistrés
+    courses = load_courses()
+    exams = load_exams()
+    filtered_courses = [c for c in courses if start_year <= c["year"] <= end_year]
+    filtered_exams = [e for e in exams if start_year <= e["year"] <= end_year]
     
-    # Filtrer les cours selon l'année
-    courses_db = load_courses_db()
-    filtered_courses = [course for course in courses_db if start_year <= course["year"] <= end_year]
-    course_options = {}
-    for course in filtered_courses:
-        display_title = f"{course['title']} ({course['year']})"
-        course_options[display_title] = course["text"]
-    selected_courses = st.multiselect("Sélectionnez les cours à utiliser", options=list(course_options.keys()), key="selected_courses_gen")
-    course_content = ""
-    for course in selected_courses:
-        course_content += f"Cours : {course}\n{course_options[course]}\n\n"
+    course_opts = {f"{c['title']} ({c['year']})": c["text"] for c in filtered_courses}
+    exam_opts = {f"{e['title']} ({e['year']})": e["text"] for e in filtered_exams}
     
-    # Filtrer les sujets d'annales selon l'année
-    exams_db = load_exams_db()
-    filtered_exams = [exam for exam in exams_db if start_year <= exam["year"] <= end_year]
-    exam_options = {}
-    for exam in filtered_exams:
-        display_title = f"{exam['title']} ({exam['year']})"
-        exam_options[display_title] = exam["text"]
-    selected_exams = st.multiselect("Sélectionnez les sujets d'annales à utiliser", options=list(exam_options.keys()), key="selected_exams_gen")
-    exam_content = ""
-    for exam in selected_exams:
-        exam_content += f"Sujet d'annale : {exam}\n{exam_options[exam]}\n\n"
+    sel_courses = st.multiselect("Sélectionnez les cours", list(course_opts.keys()), key="gen_sel_courses")
+    sel_exams = st.multiselect("Sélectionnez les sujets", list(exam_opts.keys()), key="gen_sel_exams")
     
-    if not course_content or not exam_content:
-        st.info("Veuillez sélectionner au moins un cours et un sujet d'annale dans la plage d'années spécifiée.")
-    else:
-        generation_mode = st.radio("Choisissez le mode de génération :", ["Une Question", "Annales Complète"], key="generation_mode")
-        base_prompt = "Génère des questions d'examen basées sur le contenu suivant :\n\n"
-        base_prompt += f"{course_content}\n"
-        base_prompt += f"{exam_content}\n"
-        if generation_mode == "Une Question":
-            base_prompt += "\nVeuillez générer une seule question d'examen. Pour cette question, indiquez la réponse ainsi que la provenance sous la forme 'Page X de \"Nom du document\"'."
+    if sel_courses and sel_exams:
+        # Concaténer les contenus
+        cont_courses = "\n".join([f"Cours : {title}\n{course_opts[title]}" for title in sel_courses])
+        cont_exams   = "\n".join([f"Sujet : {title}\n{exam_opts[title]}" for title in sel_exams])
+        
+        gen_mode = st.radio("Mode de génération", ["Une Question", "Annales Complète"], key="gen_mode")
+        prompt = "Génère des questions d'examen basées sur le contenu suivant :\n\n" + cont_courses + "\n" + cont_exams + "\n"
+        if gen_mode == "Une Question":
+            prompt += "Veuillez générer une seule question d'examen. Pour la réponse, mentionnez la provenance sous la forme 'Page X de \"Nom du document\"'."
             max_len = 128
         else:
-            base_prompt += "\nVeuillez générer une annale complète composée de plusieurs questions d'examen. Pour chacune, indiquez la réponse ainsi que la provenance sous la forme 'Page X de \"Nom du document\"'."
+            prompt += "Veuillez générer une annale complète composée de plusieurs questions. Pour chacune, indiquez la réponse et la provenance (ex: Page X de \"Nom du document\")."
             max_len = 256
         
-        st.write("Prompt généré automatiquement (modifiable) :")
-        st.text_area("Prompt (modifiable)", value=base_prompt, key="custom_prompt", height=150)
-        
+        # Laisser la possibilité de modifier le prompt
+        prompt = st.text_area("Prompt généré (modifiable)", value=prompt, height=150, key="gen_prompt")
         if st.button("Générer"):
-            prompt_to_use = st.session_state.custom_prompt
-            st.write("Génération en cours...")
-            with st.spinner("Veuillez patienter..."):
+            if generator is None:
+                st.error("Le générateur n'est pas correctement initialisé.")
+            else:
+                st.write("Génération en cours...")
                 try:
-                    output = generator(prompt_to_use, max_length=max_len, num_return_sequences=1)
-                    generated_questions = output[0]["generated_text"]
-                    st.subheader("Questions générées")
-                    st.write(generated_questions)
-                    st.session_state.generated_questions = generated_questions
-                    # Sauvegarde des titres utilisés (sans l'année)
-                    used_courses = [c.split(" (")[0] for c in selected_courses]
-                    st.session_state.generated_questions_courses = used_courses
-                    if not selected_courses and course_options:
-                        st.session_state.generated_questions_courses = []
+                    out = generator(prompt, max_length=max_len, num_return_sequences=1)
+                    result = out[0]["generated_text"]
+                    st.subheader("Questions Générées")
+                    st.write(result)
+                    st.session_state.generated_result = result
+                    # On extraira le titre (sans l'année) des cours utilisés,
+                    # à supposer qu'on ne sélectionne qu'un cours pour feedback.
+                    titles_used = [opt.split(" (")[0] for opt in sel_courses]
+                    st.session_state.gen_courses = titles_used
                 except Exception as e:
-                    st.error(f"Une erreur est survenue lors de la génération : {e}")
-
-# ---------- Onglet 4 : Feedback ----------
-with tabs[3]:
-    st.header("Donner votre avis sur la qualité des questions")
-    if "generated_questions" not in st.session_state:
-        st.info("Veuillez d'abord générer des questions dans l'onglet 'Générer les questions'.")
-    elif ("generated_questions_courses" not in st.session_state or 
-          len(set(st.session_state.generated_questions_courses)) != 1):
-        st.info("Le feedback est disponible uniquement lorsque les questions sont générées à partir d'un unique cours. Veuillez sélectionner un seul intitulé de cours lors de la génération.")
+                    st.error(f"Erreur lors de la génération : {e}")
     else:
-        st.write("Notez chaque question individuellement :")
-        questions_list = [q.strip() for q in st.session_state.generated_questions.split("\n") if q.strip() != ""]
-        question_ratings = {}
-        for i, question in enumerate(questions_list):
-            st.markdown(f"**Question {i+1}** : {question}")
-            rating = st.slider(
-                f"Votre note pour la question {i+1} (1 = Médiocre, 5 = Excellent)",
-                min_value=1,
-                max_value=5,
-                value=3,
-                step=1,
-                key=f"rating_{i}"
-            )
-            question_ratings[f"Question {i+1}"] = {"question": question, "rating": rating}
-        overall_rating = st.slider("Note globale pour l'ensemble des questions (1 = Médiocre, 5 = Excellent)",
-                                   min_value=1, max_value=5, value=3, step=1, key="overall_rating")
-        if st.button("Envoyer votre feedback"):
+        st.info("Sélectionnez au moins un cours et un sujet dans la plage d'années.")
+        
+# --------- Onglet 4 : Feedback ---------
+with tabs[3]:
+    st.header("Feedback")
+    if "generated_result" not in st.session_state:
+        st.info("Générez d'abord des questions.")
+    elif not ("gen_courses" in st.session_state and len(set(st.session_state.gen_courses)) == 1):
+        st.info("Le feedback est disponible uniquement si les questions proviennent d'un seul cours.")
+    else:
+        st.write("Notez chaque question générée :")
+        questions = [q.strip() for q in st.session_state.generated_result.split("\n") if q.strip()]
+        fb = {}
+        for idx, q in enumerate(questions):
+            st.markdown(f"**Question {idx+1}**: {q}")
+            note = st.slider(f"Notez la question {idx+1}", 1, 5, 3, key=f"q_{idx}")
+            fb[f"Question {idx+1}"] = {"question": q, "note": note}
+        overall = st.slider("Note globale", 1, 5, 3, key="overall")
+        if st.button("Envoyer le feedback"):
             feedback_entry = {
                 "timestamp": datetime.now().isoformat(),
-                "generated_questions": st.session_state.generated_questions,
-                "question_ratings": question_ratings,
-                "overall_rating": overall_rating,
-                "courses_used": st.session_state.generated_questions_courses
+                "generated": st.session_state.generated_result,
+                "feedback": fb,
+                "overall": overall,
+                "course": st.session_state.gen_courses[0]
             }
-            save_feedback_entry(feedback_entry)
-            st.success("Merci pour votre feedback !")
-            st.session_state.last_feedback = feedback_entry
+            feedbacks = load_feedback()
+            feedbacks.append(feedback_entry)
+            save_feedback(feedbacks)
+            st.success("Feedback enregistré.")
 
-# ---------- Onglet 5 : Historique des feedbacks ----------
+# --------- Onglet 5 : Historique ---------
 with tabs[4]:
-    st.header("Historique des feedbacks")
-    history = load_feedback_history()
-    if not history:
-        st.info("Aucun feedback enregistré pour le moment.")
-    else:
-        all_courses = set()
-        for entry in history:
-            for course_title in entry.get("courses_used", []):
-                all_courses.add(course_title)
-        all_courses = list(all_courses)
-        all_courses.sort()
-        selected_filter = st.selectbox("Filtrer par intitulé de cours", options=["Tous"] + all_courses, key="filter_course")
-        for entry in history:
-            entry_courses = entry.get("courses_used", [])
-            if selected_filter != "Tous" and selected_filter not in entry_courses:
+    st.header("Historique des Feedbacks")
+    feedbacks = load_feedback()
+    if feedbacks:
+        courses_set = sorted({entry.get("course", "N/A") for entry in feedbacks})
+        filt = st.selectbox("Filtrer par cours", ["Tous"] + courses_set, key="hist_filter")
+        for entry in feedbacks:
+            if filt != "Tous" and entry.get("course") != filt:
                 continue
-            st.markdown(f"**Date et heure :** {entry.get('timestamp', 'Inconnue')}")
-            st.markdown(f"**Intitulé(s) du cours utilisé(s) :** {', '.join(entry_courses) if entry_courses else 'N/A'}")
-            st.markdown(f"**Note Globale :** {entry.get('overall_rating', 'N/A')}")
-            qr = entry.get("question_ratings", {})
-            if qr:
-                st.markdown("**Notes par question :**")
-                for key, val in qr.items():
-                    st.markdown(f"- {key} : {val.get('rating', 'N/A')} (Question : {val.get('question', '')})")
+            st.markdown(f"**Date/Heure**: {entry.get('timestamp')}")
+            st.markdown(f"**Cours**: {entry.get('course')}")
+            st.markdown(f"**Note Globale**: {entry.get('overall')}")
+            for q, info in entry.get("feedback", {}).items():
+                st.markdown(f"- {q} : {info.get('note')} (Question: {info.get('question')})")
             st.markdown("---")
+    else:
+        st.info("Aucun feedback enregistré.")
+
+if __name__ == "__main__":
+    main()

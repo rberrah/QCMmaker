@@ -5,7 +5,7 @@ from datetime import datetime
 from transformers import pipeline
 import pandas as pd
 
-# Modules pour l'extraction de texte depuis différents formats
+# Modules pour extraire le texte depuis divers formats
 import PyPDF2
 import docx
 from pptx import Presentation
@@ -13,8 +13,8 @@ from pptx import Presentation
 # --- Fonction d'extraction de texte selon le format ---
 def extract_text_from_file(uploaded_file):
     """
-    Extrait le texte d'un fichier selon son extension.
-    Formats supportés : .txt, .pdf, .docx, .pptx, .xls, .xlsx
+    Extrait le texte d'un fichier en fonction de son extension.
+    Formats supportés : .txt, .pdf, .docx, .pptx, .xls et .xlsx
     """
     file_extension = os.path.splitext(uploaded_file.name)[1].lower()
     text = ""
@@ -85,7 +85,7 @@ tabs = st.tabs(["Cours", "Sujets d'annales", "Générer les questions", "Feedbac
 # -------------------- Onglet 1 : Déposer un cours --------------------
 with tabs[0]:
     st.header("Déposer un cours")
-    mode_course = st.radio("Sélectionnez le mode de dépôt du cours :", 
+    mode_course = st.radio("Sélectionnez le mode de dépôt du cours :",
                            ("Téléverser des fichiers", "Saisie manuelle"), key="mode_course")
     
     if mode_course == "Téléverser des fichiers":
@@ -99,27 +99,27 @@ with tabs[0]:
             if common_title_course:
                 # Tous les fichiers font partie d'un même cours
                 combined_text = ""
-                for file in uploaded_course_files:
-                    text = extract_text_from_file(file)
+                for f in uploaded_course_files:
+                    text = extract_text_from_file(f)
                     if text.startswith("Erreur") or text.startswith("Format"):
-                        st.error(f"{file.name} : {text}")
+                        st.error(f"{f.name} : {text}")
                     else:
-                        combined_text += f"{text}\n"
+                        combined_text += text + "\n"
                 if combined_text:
                     courses_dict[common_title_course] = combined_text
             else:
                 # Chaque fichier constitue un cours distinct
-                for file in uploaded_course_files:
-                    text = extract_text_from_file(file)
+                for f in uploaded_course_files:
+                    text = extract_text_from_file(f)
                     if text.startswith("Erreur") or text.startswith("Format"):
-                        st.error(f"{file.name} : {text}")
+                        st.error(f"{f.name} : {text}")
                     else:
-                        courses_dict[file.name] = text
+                        courses_dict[f.name] = text
             if courses_dict:
                 st.success(f"{len(courses_dict)} cours téléversés avec succès !")
                 st.session_state.uploaded_courses = courses_dict
     else:
-        # Saisie manuelle du cours
+        # Saisie manuelle
         chapter = st.text_input("Titre du cours ou chapitre", key="manual_course_title")
         manual_course_text = st.text_area("Collez ici le contenu du cours", height=300, key="manual_course_text")
         if manual_course_text:
@@ -130,7 +130,7 @@ with tabs[0]:
 # -------------------- Onglet 2 : Déposer un sujet d'annale --------------------
 with tabs[1]:
     st.header("Déposer un sujet d'annale")
-    mode_exam = st.radio("Sélectionnez le mode de dépôt du sujet d'annale :", 
+    mode_exam = st.radio("Sélectionnez le mode de dépôt du sujet d'annale :",
                          ("Téléverser des fichiers", "Saisie manuelle"), key="mode_exam")
     if mode_exam == "Téléverser des fichiers":
         common_title_exam = st.text_input("Titre commun du sujet d'annale (optionnel)", key="common_exam_title")
@@ -141,29 +141,26 @@ with tabs[1]:
         if uploaded_exam_files:
             exam_dict = {}
             if common_title_exam:
-                # Tous les fichiers font partie du même sujet d'annale
                 combined_text = ""
-                for file in uploaded_exam_files:
-                    text = extract_text_from_file(file)
+                for f in uploaded_exam_files:
+                    text = extract_text_from_file(f)
                     if text.startswith("Erreur") or text.startswith("Format"):
-                        st.error(f"{file.name} : {text}")
+                        st.error(f"{f.name} : {text}")
                     else:
-                        combined_text += f"{text}\n"
+                        combined_text += text + "\n"
                 if combined_text:
                     exam_dict[common_title_exam] = combined_text
             else:
-                # Chaque fichier constitue un sujet d'annale distinct
-                for file in uploaded_exam_files:
-                    text = extract_text_from_file(file)
+                for f in uploaded_exam_files:
+                    text = extract_text_from_file(f)
                     if text.startswith("Erreur") or text.startswith("Format"):
-                        st.error(f"{file.name} : {text}")
+                        st.error(f"{f.name} : {text}")
                     else:
-                        exam_dict[file.name] = text
+                        exam_dict[f.name] = text
             if exam_dict:
                 st.success(f"{len(exam_dict)} sujets d'annales téléversés avec succès !")
                 st.session_state.uploaded_exams = exam_dict
     else:
-        # Saisie manuelle du sujet d'annale
         exam_title = st.text_input("Titre du sujet d'annale", key="manual_exam_title")
         manual_exam_text = st.text_area("Collez ici le contenu du sujet d'annale", height=200, key="manual_exam_text")
         if manual_exam_text:
@@ -182,6 +179,7 @@ with tabs[2]:
         course_options[st.session_state.manual_course["title"]] = st.session_state.manual_course["text"]
     
     course_content = ""
+    selected_courses = []
     if course_options:
         selected_courses = st.multiselect("Sélectionnez les cours à utiliser",
                                           options=list(course_options.keys()),
@@ -190,7 +188,7 @@ with tabs[2]:
             course_content += f"Cours : {course}\n{course_options[course]}\n\n"
     else:
         st.info("Veuillez déposer au moins un cours dans l'onglet 'Cours'.")
-
+    
     # Constitution de la source des sujets d'annales
     exam_options = {}
     if "uploaded_exams" in st.session_state:
@@ -199,6 +197,7 @@ with tabs[2]:
         exam_options[st.session_state.manual_exam["title"]] = st.session_state.manual_exam["text"]
     
     exam_content = ""
+    selected_exams = []
     if exam_options:
         selected_exams = st.multiselect("Sélectionnez les sujets d'annales à utiliser",
                                         options=list(exam_options.keys()),
@@ -229,14 +228,23 @@ with tabs[2]:
                     st.subheader("Questions générées")
                     st.write(generated_questions)
                     st.session_state.generated_questions = generated_questions
+                    # Sauvegarde la liste des intitulés des cours utilisés pour la génération
+                    st.session_state.generated_questions_courses = selected_courses  
+                    # Si aucune sélection (par ex. en mode manuel), on prend le cours manuel
+                    if not selected_courses and "manual_course" in st.session_state:
+                        st.session_state.generated_questions_courses = [st.session_state.manual_course["title"]]
                 except Exception as e:
                     st.error(f"Une erreur est survenue lors de la génération : {e}")
 
 # -------------------- Onglet 4 : Feedback --------------------
 with tabs[3]:
     st.header("Donner votre avis sur la qualité des questions")
+    # Afficher le feedback uniquement si les questions ont été générées à partir d'un cours unique
     if "generated_questions" not in st.session_state:
         st.info("Veuillez d'abord générer des questions dans l'onglet 'Générer les questions'.")
+    elif ("generated_questions_courses" not in st.session_state or 
+          len(set(st.session_state.generated_questions_courses)) != 1):
+        st.info("Le feedback est disponible uniquement lorsque les questions sont générées à partir d'un cours unique. Veuillez sélectionner un seul intitulé de cours lors de la génération.")
     else:
         st.write("Notez chaque question individuellement :")
         questions_list = [q.strip() for q in st.session_state.generated_questions.split("\n") if q.strip() != ""]
@@ -245,7 +253,10 @@ with tabs[3]:
             st.markdown(f"**Question {i+1}** : {question}")
             rating = st.slider(
                 f"Votre note pour la question {i+1} (1 = Médiocre, 5 = Excellent)",
-                min_value=1, max_value=5, value=3, step=1,
+                min_value=1,
+                max_value=5,
+                value=3,
+                step=1,
                 key=f"rating_{i}"
             )
             question_ratings[f"Question {i+1}"] = {"question": question, "rating": rating}
@@ -253,11 +264,13 @@ with tabs[3]:
         overall_rating = st.slider("Note globale pour l'ensemble des questions (1 = Médiocre, 5 = Excellent)",
                                    min_value=1, max_value=5, value=3, step=1, key="overall_rating")
         if st.button("Envoyer votre feedback"):
+            # Enregistrement du feedback avec l'intitulé du cours utilisé
             feedback_entry = {
                 "timestamp": datetime.now().isoformat(),
                 "generated_questions": st.session_state.generated_questions,
                 "question_ratings": question_ratings,
-                "overall_rating": overall_rating
+                "overall_rating": overall_rating,
+                "courses_used": st.session_state.generated_questions_courses
             }
             save_feedback_entry(feedback_entry)
             st.success("Merci pour votre feedback !")
@@ -270,8 +283,23 @@ with tabs[4]:
     if not history:
         st.info("Aucun feedback enregistré pour le moment.")
     else:
+        # Extraire l'ensemble des intitulés de cours des feedbacks sauvegardés
+        all_courses = set()
         for entry in history:
+            for course_title in entry.get("courses_used", []):
+                all_courses.add(course_title)
+        all_courses = list(all_courses)
+        all_courses.sort()
+        # Sélectionner un cours pour filtrer
+        selected_filter = st.selectbox("Filtrer par intitulé de cours", options=["Tous"] + all_courses, key="filter_course")
+        # Affichage des feedbacks en fonction du filtre
+        for entry in history:
+            entry_courses = entry.get("courses_used", [])
+            # Si un filtre est mis et que l'intitulé n'apparaît pas dans cet ensemble, on ne l'affiche pas
+            if selected_filter != "Tous" and selected_filter not in entry_courses:
+                continue
             st.markdown(f"**Date et heure :** {entry.get('timestamp', 'Inconnue')}")
+            st.markdown(f"**Intitulé(s) du cours utilisé(s):** {', '.join(entry_courses) if entry_courses else 'N/A'}")
             st.markdown(f"**Note Globale :** {entry.get('overall_rating', 'N/A')}")
             qr = entry.get("question_ratings", {})
             if qr:
